@@ -85,7 +85,7 @@
     const spacingX = 12, spacingY = 12;
     const totalW = cols * btnW + (cols - 1) * spacingX;
     const startX = (w - totalW) / 2;
-    const startY = h * 0.70;
+    const startY = h * 0.62;
     return DIFFICULTIES.map((d, i) => {
       const col = i % cols;
       const row = Math.floor(i / cols);
@@ -260,18 +260,19 @@
 
     drawBackground();
     drawStars();
-    drawPipes();
-    drawGround();
-    drawBird();
-    drawParticles();
-    drawFlash();
 
-    if (state === State.PLAYING || state === State.DEAD) {
+    if (state === State.MENU) {
+      drawGround();
+      drawMenu();
+    } else {
+      drawPipes();
+      drawGround();
+      drawBird();
+      drawParticles();
+      drawFlash();
       drawScore();
+      if (state === State.DEAD) drawDeath();
     }
-
-    if (state === State.MENU) drawMenu();
-    if (state === State.DEAD) drawDeath();
   }
 
   function drawBackground() {
@@ -460,43 +461,39 @@
     ctx.save();
     ctx.textAlign = 'center';
 
-    // Title
-    ctx.font = 'bold 58px -apple-system, Helvetica, Arial, sans-serif';
+    // Title: FLAPPY FUXS
+    ctx.font = 'bold 48px -apple-system, Helvetica, Arial, sans-serif';
     ctx.fillStyle = '#00d4ff';
     ctx.shadowColor = '#00d4ff';
     ctx.shadowBlur = 20;
-    ctx.fillText('FLAPPY', w / 2, h * 0.22);
+    ctx.fillText('FLAPPY FUXS', w / 2, h * 0.18);
     ctx.shadowBlur = 0;
 
-    // Idle bird bob
-    const bobY = h * 0.36 + Math.sin(Date.now() * 0.003) * 10;
-    const savedY = bird.y;
-    bird.x = w * 0.5;
+    // Idle bird bob — centered nicely below title
+    const bobY = h * 0.32 + Math.sin(Date.now() * 0.003) * 10;
+    const savedBird = { x: bird.x, y: bird.y, rot: bird.rot, wingPhase: bird.wingPhase };
+    bird.x = w / 2;
     bird.y = bobY;
     bird.rot = 0;
     bird.wingPhase = Math.sin(Date.now() * 0.008) * 0.5 + 0.5;
     drawBird();
-    bird.y = savedY;
+    bird.x = savedBird.x;
+    bird.y = savedBird.y;
+    bird.rot = savedBird.rot;
+    bird.wingPhase = savedBird.wingPhase;
 
-    // Subtitle
+    // "TAP TO PLAY" pulse
     ctx.font = '18px -apple-system, Helvetica, Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    const pulse = 0.4 + Math.sin(Date.now() * 0.004) * 0.3;
-    ctx.globalAlpha = pulse + 0.3;
-    ctx.fillText('TAP TO PLAY', w / 2, h * 0.5);
+    const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.3;
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillText('TAP TO PLAY', w / 2, h * 0.46);
     ctx.globalAlpha = 1;
 
-    // Best score
-    if (bestScore > 0) {
-      ctx.font = '16px -apple-system, Helvetica, Arial, sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillText('BEST: ' + bestScore, w / 2, h * 0.56);
-    }
-
-    // Difficulty label
-    ctx.font = 'bold 14px -apple-system, Helvetica, Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillText('DIFFICULTY', w / 2, h * 0.66);
+    // Difficulty section
+    ctx.font = 'bold 13px -apple-system, Helvetica, Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText('DIFFICULTY', w / 2, h * 0.57);
 
     // Difficulty buttons
     const buttons = getDiffButtons();
@@ -505,8 +502,7 @@
       const selected = btn.index === diffIndex;
       const r = 10;
 
-      // Button background
-      ctx.fillStyle = selected ? btn.diff.color : 'rgba(255,255,255,0.08)';
+      // Button shape
       ctx.beginPath();
       ctx.moveTo(btn.x + r, btn.y);
       ctx.lineTo(btn.x + btn.w - r, btn.y);
@@ -518,20 +514,18 @@
       ctx.lineTo(btn.x, btn.y + r);
       ctx.quadraticCurveTo(btn.x, btn.y, btn.x + r, btn.y);
       ctx.closePath();
-      ctx.fill();
 
-      // Glow on selected
       if (selected) {
+        ctx.fillStyle = btn.diff.color;
         ctx.shadowColor = btn.diff.color;
         ctx.shadowBlur = 12;
         ctx.fill();
         ctx.shadowBlur = 0;
         ctx.shadowColor = 'transparent';
-      }
-
-      // Border on unselected
-      if (!selected) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.06)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
         ctx.lineWidth = 1;
         ctx.stroke();
       }
@@ -539,15 +533,15 @@
       // Label
       ctx.font = selected ? 'bold 13px -apple-system, Helvetica, Arial, sans-serif'
                           : '12px -apple-system, Helvetica, Arial, sans-serif';
-      ctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,0.45)';
+      ctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,0.4)';
       ctx.fillText(btn.diff.name, btn.x + btn.w / 2, btn.y + btn.h / 2);
 
       // Per-difficulty best score under button
       const dBest = parseInt(localStorage.getItem('flappy-best-' + btn.index)) || 0;
       if (dBest > 0) {
         ctx.font = '10px -apple-system, Helvetica, Arial, sans-serif';
-        ctx.fillStyle = selected ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)';
-        ctx.fillText(dBest, btn.x + btn.w / 2, btn.y + btn.h + 14);
+        ctx.fillStyle = selected ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
+        ctx.fillText(dBest, btn.x + btn.w / 2, btn.y + btn.h + 13);
       }
     }
     ctx.textBaseline = 'alphabetic';
