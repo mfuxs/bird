@@ -30,10 +30,111 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
     }
+
+    /* Install overlay */
+    #install-overlay {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(10, 10, 26, 0.97);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 24px;
+      font-family: -apple-system, Helvetica, Arial, sans-serif;
+      color: #fff;
+      opacity: 1; transition: opacity 0.3s ease;
+    }
+    #install-overlay.hidden {
+      opacity: 0; pointer-events: none;
+    }
+    #install-overlay .close-btn {
+      position: absolute;
+      top: max(16px, env(safe-area-inset-top, 16px));
+      right: 16px;
+      width: 40px; height: 40px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      color: #fff; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #install-overlay .close-btn:active { background: rgba(255,255,255,0.2); }
+    #install-overlay h1 {
+      font-size: 28px; font-weight: 800;
+      color: #00d4ff; margin-bottom: 6px;
+      text-align: center;
+    }
+    #install-overlay .subtitle {
+      font-size: 14px; color: rgba(255,255,255,0.5);
+      margin-bottom: 40px; text-align: center;
+    }
+    #install-overlay .steps {
+      display: flex; flex-direction: column; gap: 28px;
+      width: 100%; max-width: 320px;
+    }
+    #install-overlay .step {
+      display: flex; align-items: flex-start; gap: 16px;
+    }
+    #install-overlay .step-num {
+      flex-shrink: 0;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00d4ff, #0088cc);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 800;
+    }
+    #install-overlay .step-content h2 {
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 4px;
+    }
+    #install-overlay .step-content p {
+      font-size: 13px; color: rgba(255,255,255,0.55);
+      line-height: 1.5;
+    }
+    #install-overlay .step-content .icon-inline {
+      display: inline-block; vertical-align: middle;
+      font-size: 16px; margin: 0 2px;
+    }
+    #install-overlay .skip-hint {
+      margin-top: 44px;
+      font-size: 13px; color: rgba(255,255,255,0.3);
+      text-align: center;
+    }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
+
+  <!-- Install guide overlay (only shown in browser, not in installed PWA) -->
+  <div id="install-overlay" class="hidden">
+    <button class="close-btn" id="install-close" aria-label="Schliessen">&times;</button>
+    <h1>FLAPPY FUXS</h1>
+    <p class="subtitle">Installiere die App auf deinem iPhone</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h2>Teilen-Button antippen</h2>
+          <p>Tippe unten in Safari auf das <span class="icon-inline">&#xFEFF;<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span> Share-Icon.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h2>Zum Home-Bildschirm</h2>
+          <p>Scrolle runter und tippe auf <strong>&bdquo;Zum Home-Bildschirm&ldquo;</strong>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h2>Fertig!</h2>
+          <p>Die App startet jetzt im Vollbild &mdash; ohne Browser-Leiste und funktioniert offline.</p>
+        </div>
+      </div>
+    </div>
+    <p class="skip-hint">Oder einfach hier im Browser spielen &darr;</p>
+  </div>
 
   <script src="audio.js"></script>
   <script src="game.js"></script>
@@ -43,6 +144,27 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
     }
+
+    // Show install guide only in browser mode (not installed PWA)
+    (function() {
+      const isStandalone = window.navigator.standalone === true
+        || window.matchMedia('(display-mode: standalone)').matches;
+      const overlay = document.getElementById('install-overlay');
+      const closeBtn = document.getElementById('install-close');
+
+      if (!isStandalone) {
+        overlay.classList.remove('hidden');
+      }
+
+      closeBtn.addEventListener('click', function() {
+        overlay.classList.add('hidden');
+      });
+      closeBtn.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        overlay.classList.add('hidden');
+      }, { passive: false });
+    })();
 
     // Generate PNG icons from SVG and cache them for manifest
     (async function generateIcons() {

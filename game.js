@@ -106,6 +106,10 @@
 
   // --- Input ---
   function handleTap(tx, ty) {
+    // Block input while install overlay is visible
+    const overlay = document.getElementById('install-overlay');
+    if (overlay && !overlay.classList.contains('hidden')) return;
+
     if (state === State.MENU) {
       // Check difficulty buttons
       const buttons = getDiffButtons();
