@@ -7,11 +7,18 @@
   const GRAVITY = 0.4;
   const FLAP_VEL = -7;
   const PIPE_W = 62;
-  const PIPE_GAP = 155;
-  const PIPE_SPEED = 2.8;
   const BIRD_R = 16;
   const GROUND_H = 2;
-  const SPAWN_INTERVAL = 180; // frames between pipes
+
+  // --- Difficulty ---
+  const DIFFICULTIES = [
+    { name: 'EASY',       gap: 155, interval: 180, speed: 2.8, color: '#4caf50' },
+    { name: 'NORMAL',     gap: 130, interval: 145, speed: 3.0, color: '#ff9800' },
+    { name: 'HARD',       gap: 112, interval: 115, speed: 3.3, color: '#f44336' },
+    { name: 'SUPER HARD', gap: 97,  interval: 90,  speed: 3.6, color: '#9c27b0' },
+  ];
+  let diffIndex = parseInt(localStorage.getItem('flappy-diff')) || 0;
+  let diff = DIFFICULTIES[diffIndex];
 
   // --- State ---
   const State = { MENU: 0, PLAYING: 1, DEAD: 2 };
@@ -19,7 +26,7 @@
   let bird = { x: 0, y: 0, vy: 0, rot: 0, wingPhase: 0 };
   let pipes = [];
   let scoreVal = 0;
-  let bestScore = parseInt(localStorage.getItem('flappy-best')) || 0;
+  let bestScore = parseInt(localStorage.getItem('flappy-best-' + diffIndex)) || 0;
   let frameCount = 0;
   let deathTimer = 0;
   let flashAlpha = 0;
@@ -69,9 +76,47 @@
     particles = [];
   }
 
+  // --- Difficulty buttons layout (2x2 grid for small screens) ---
+  function getDiffButtons() {
+    const cols = w < 500 ? 2 : 4;
+    const rows = Math.ceil(DIFFICULTIES.length / cols);
+    const btnW = w < 500 ? Math.min(130, (w - 60) / 2) : 120;
+    const btnH = 38;
+    const spacingX = 12, spacingY = 12;
+    const totalW = cols * btnW + (cols - 1) * spacingX;
+    const startX = (w - totalW) / 2;
+    const startY = h * 0.70;
+    return DIFFICULTIES.map((d, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      return {
+        x: startX + col * (btnW + spacingX),
+        y: startY + row * (btnH + spacingY),
+        w: btnW, h: btnH, diff: d, index: i
+      };
+    });
+  }
+
+  function setDifficulty(index) {
+    diffIndex = Math.max(0, Math.min(DIFFICULTIES.length - 1, index));
+    diff = DIFFICULTIES[diffIndex];
+    bestScore = parseInt(localStorage.getItem('flappy-best-' + diffIndex)) || 0;
+    localStorage.setItem('flappy-diff', diffIndex);
+  }
+
   // --- Input ---
-  function flapBird() {
+  function handleTap(tx, ty) {
     if (state === State.MENU) {
+      // Check difficulty buttons
+      const buttons = getDiffButtons();
+      for (const btn of buttons) {
+        if (tx >= btn.x && tx <= btn.x + btn.w && ty >= btn.y && ty <= btn.y + btn.h) {
+          setDifficulty(btn.index);
+          GameAudio.flap();
+          return;
+        }
+      }
+      // Start game
       state = State.PLAYING;
       resetGame();
       GameAudio.swoosh();
@@ -80,6 +125,7 @@
       bird.vy = FLAP_VEL;
       bird.wingPhase = 1;
       GameAudio.flap();
+      return;
     }
     if (state === State.DEAD && deathTimer > 20) {
       state = State.MENU;
@@ -89,13 +135,23 @@
 
   canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    flapBird();
+    const t = e.touches[0];
+    handleTap(t.clientX, t.clientY);
   }, { passive: false });
+
+  canvas.addEventListener('mousedown', (e) => {
+    handleTap(e.clientX, e.clientY);
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' || e.code === 'ArrowUp') {
       e.preventDefault();
-      flapBird();
+      handleTap(0, 0); // won't hit buttons, will start/flap
+    }
+    // Arrow keys to change difficulty in menu
+    if (state === State.MENU) {
+      if (e.code === 'ArrowLeft') setDifficulty(diffIndex - 1);
+      if (e.code === 'ArrowRight') setDifficulty(diffIndex + 1);
     }
   });
 
@@ -132,19 +188,19 @@
     bird.wingPhase *= 0.85;
 
     // Ground scroll
-    groundOffset = (groundOffset + PIPE_SPEED) % 20;
+    groundOffset = (groundOffset + diff.speed) % 20;
 
     // Spawn pipes
-    if (frameCount % SPAWN_INTERVAL === 0 || pipes.length === 0) {
-      const minGapY = PIPE_GAP / 2 + 60;
-      const maxGapY = h - GROUND_H - PIPE_GAP / 2 - 60;
+    if (frameCount % diff.interval === 0 || pipes.length === 0) {
+      const minGapY = diff.gap / 2 + 60;
+      const maxGapY = h - GROUND_H - diff.gap / 2 - 60;
       const gapY = Math.random() * (maxGapY - minGapY) + minGapY;
       pipes.push({ x: w + 10, gapY, scored: false });
     }
 
     // Move pipes
     for (let i = pipes.length - 1; i >= 0; i--) {
-      pipes[i].x -= PIPE_SPEED;
+      pipes[i].x -= diff.speed;
       if (pipes[i].x < -PIPE_W) {
         pipes.splice(i, 1);
         continue;
@@ -168,7 +224,7 @@
 
     // Pipes
     for (const p of pipes) {
-      const px = p.x, pw = PIPE_W, gapY = p.gapY, gapH = PIPE_GAP;
+      const px = p.x, pw = PIPE_W, gapY = p.gapY, gapH = diff.gap;
       // Top pipe rect: px, 0, pw, gapY - gapH/2
       // Bottom pipe rect: px, gapY + gapH/2, pw, h
       if (circleRect(bx, by, br, px, 0, pw, gapY - gapH / 2) ||
@@ -185,7 +241,7 @@
     flashAlpha = 0.6;
     if (scoreVal > bestScore) {
       bestScore = scoreVal;
-      localStorage.setItem('flappy-best', bestScore);
+      localStorage.setItem('flappy-best-' + diffIndex, bestScore);
     }
     spawnDeathParticles();
     GameAudio.die();
@@ -239,8 +295,8 @@
 
   function drawPipes() {
     for (const p of pipes) {
-      const topH = p.gapY - PIPE_GAP / 2;
-      const botY = p.gapY + PIPE_GAP / 2;
+      const topH = p.gapY - diff.gap / 2;
+      const botY = p.gapY + diff.gap / 2;
       const botH = h - botY;
 
       // Glow
@@ -384,13 +440,17 @@
 
   function drawScore() {
     ctx.save();
-    ctx.font = 'bold 52px -apple-system, Helvetica, Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    // Shadow
+    // Difficulty badge
+    ctx.font = 'bold 12px -apple-system, Helvetica, Arial, sans-serif';
+    ctx.fillStyle = diff.color;
+    ctx.fillText(diff.name, w / 2, 45);
+    // Score shadow
+    ctx.font = 'bold 52px -apple-system, Helvetica, Arial, sans-serif';
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fillText(scoreVal, w / 2 + 2, 62);
-    // Text
+    // Score text
     ctx.fillStyle = '#fff';
     ctx.fillText(scoreVal, w / 2, 60);
     ctx.restore();
@@ -405,26 +465,11 @@
     ctx.fillStyle = '#00d4ff';
     ctx.shadowColor = '#00d4ff';
     ctx.shadowBlur = 20;
-    ctx.fillText('FLAPPY', w / 2, h * 0.25);
+    ctx.fillText('FLAPPY', w / 2, h * 0.22);
     ctx.shadowBlur = 0;
 
-    // Subtitle
-    ctx.font = '18px -apple-system, Helvetica, Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    const pulse = 0.4 + Math.sin(Date.now() * 0.004) * 0.3;
-    ctx.globalAlpha = pulse + 0.3;
-    ctx.fillText('TAP TO PLAY', w / 2, h * 0.55);
-    ctx.globalAlpha = 1;
-
-    // Best score
-    if (bestScore > 0) {
-      ctx.font = '16px -apple-system, Helvetica, Arial, sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.fillText('BEST: ' + bestScore, w / 2, h * 0.62);
-    }
-
     // Idle bird bob
-    const bobY = h * 0.4 + Math.sin(Date.now() * 0.003) * 10;
+    const bobY = h * 0.36 + Math.sin(Date.now() * 0.003) * 10;
     const savedY = bird.y;
     bird.x = w * 0.5;
     bird.y = bobY;
@@ -432,6 +477,80 @@
     bird.wingPhase = Math.sin(Date.now() * 0.008) * 0.5 + 0.5;
     drawBird();
     bird.y = savedY;
+
+    // Subtitle
+    ctx.font = '18px -apple-system, Helvetica, Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    const pulse = 0.4 + Math.sin(Date.now() * 0.004) * 0.3;
+    ctx.globalAlpha = pulse + 0.3;
+    ctx.fillText('TAP TO PLAY', w / 2, h * 0.5);
+    ctx.globalAlpha = 1;
+
+    // Best score
+    if (bestScore > 0) {
+      ctx.font = '16px -apple-system, Helvetica, Arial, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillText('BEST: ' + bestScore, w / 2, h * 0.56);
+    }
+
+    // Difficulty label
+    ctx.font = 'bold 14px -apple-system, Helvetica, Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillText('DIFFICULTY', w / 2, h * 0.66);
+
+    // Difficulty buttons
+    const buttons = getDiffButtons();
+    ctx.textBaseline = 'middle';
+    for (const btn of buttons) {
+      const selected = btn.index === diffIndex;
+      const r = 10;
+
+      // Button background
+      ctx.fillStyle = selected ? btn.diff.color : 'rgba(255,255,255,0.08)';
+      ctx.beginPath();
+      ctx.moveTo(btn.x + r, btn.y);
+      ctx.lineTo(btn.x + btn.w - r, btn.y);
+      ctx.quadraticCurveTo(btn.x + btn.w, btn.y, btn.x + btn.w, btn.y + r);
+      ctx.lineTo(btn.x + btn.w, btn.y + btn.h - r);
+      ctx.quadraticCurveTo(btn.x + btn.w, btn.y + btn.h, btn.x + btn.w - r, btn.y + btn.h);
+      ctx.lineTo(btn.x + r, btn.y + btn.h);
+      ctx.quadraticCurveTo(btn.x, btn.y + btn.h, btn.x, btn.y + btn.h - r);
+      ctx.lineTo(btn.x, btn.y + r);
+      ctx.quadraticCurveTo(btn.x, btn.y, btn.x + r, btn.y);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glow on selected
+      if (selected) {
+        ctx.shadowColor = btn.diff.color;
+        ctx.shadowBlur = 12;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+      }
+
+      // Border on unselected
+      if (!selected) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Label
+      ctx.font = selected ? 'bold 13px -apple-system, Helvetica, Arial, sans-serif'
+                          : '12px -apple-system, Helvetica, Arial, sans-serif';
+      ctx.fillStyle = selected ? '#fff' : 'rgba(255,255,255,0.45)';
+      ctx.fillText(btn.diff.name, btn.x + btn.w / 2, btn.y + btn.h / 2);
+
+      // Per-difficulty best score under button
+      const dBest = parseInt(localStorage.getItem('flappy-best-' + btn.index)) || 0;
+      if (dBest > 0) {
+        ctx.font = '10px -apple-system, Helvetica, Arial, sans-serif';
+        ctx.fillStyle = selected ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)';
+        ctx.fillText(dBest, btn.x + btn.w / 2, btn.y + btn.h + 14);
+      }
+    }
+    ctx.textBaseline = 'alphabetic';
 
     ctx.restore();
   }
@@ -451,8 +570,13 @@
     ctx.fillStyle = '#ef5350';
     ctx.shadowColor = '#ef5350';
     ctx.shadowBlur = 15;
-    ctx.fillText('GAME OVER', w / 2, h * 0.32);
+    ctx.fillText('GAME OVER', w / 2, h * 0.30);
     ctx.shadowBlur = 0;
+
+    // Difficulty badge
+    ctx.font = 'bold 14px -apple-system, Helvetica, Arial, sans-serif';
+    ctx.fillStyle = diff.color;
+    ctx.fillText(diff.name, w / 2, h * 0.36);
 
     // Score
     ctx.font = 'bold 64px -apple-system, Helvetica, Arial, sans-serif';
