@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Flappy Bird</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Flappy">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #1a1a2e;
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <script src="audio.js"></script>
+  <script src="game.js"></script>
+
+  <script>
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
+
+    // Generate PNG icons from SVG and cache them for manifest
+    (async function generateIcons() {
+      try {
+        const sizes = [192, 512];
+        const cache = await caches.open('flappy-v1');
+        const svgResp = await fetch('icons/icon.svg');
+        const svgText = await svgResp.text();
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        const img = new Image();
+        img.src = svgUrl;
+        await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+        for (const size of sizes) {
+          const c = document.createElement('canvas');
+          c.width = size; c.height = size;
+          const cx = c.getContext('2d');
+          cx.drawImage(img, 0, 0, size, size);
+          const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+          const resp = new Response(blob, { headers: { 'Content-Type': 'image/png' } });
+          await cache.put(new Request('icons/icon-' + size + '.png'), resp);
+        }
+        // Apple touch icon
+        const c180 = document.createElement('canvas');
+        c180.width = 180; c180.height = 180;
+        c180.getContext('2d').drawImage(img, 0, 0, 180, 180);
+        const link = document.querySelector('link[rel="apple-touch-icon"]');
+        if (link) link.href = c180.toDataURL('image/png');
+        URL.revokeObjectURL(svgUrl);
+      } catch (e) {
+        // Icons are nice-to-have, game works without them
+      }
+    })();
+  </script>
+</body>
+</html>
