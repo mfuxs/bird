@@ -194,8 +194,10 @@
     // Ground scroll
     groundOffset = (groundOffset + diff.speed) % 20;
 
-    // Spawn pipes
-    if (frameCount % diff.interval === 0 || pipes.length === 0) {
+    // Spawn pipes — only when rightmost pipe has moved far enough
+    const lastPipe = pipes.length > 0 ? pipes[pipes.length - 1] : null;
+    const minDist = diff.interval * diff.speed; // pixel distance between pipes
+    if (!lastPipe || lastPipe.x <= w + 10 - minDist) {
       const minGapY = diff.gap / 2 + 60;
       const maxGapY = h - GROUND_H - diff.gap / 2 - 60;
       const gapY = Math.random() * (maxGapY - minGapY) + minGapY;
@@ -602,15 +604,9 @@
   // --- Game Loop ---
   function loop(time) {
     if (!lastTime) lastTime = time;
-    const dt = Math.min(time - lastTime, 33);
     lastTime = time;
 
-    // Run physics steps based on dt (target ~60fps = 16.67ms per step)
-    const steps = Math.max(1, Math.round(dt / 16.67));
-    for (let i = 0; i < steps; i++) {
-      update();
-    }
-
+    update();
     draw();
     requestAnimationFrame(loop);
   }
